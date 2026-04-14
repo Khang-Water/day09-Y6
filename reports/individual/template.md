@@ -1,8 +1,8 @@
 # Báo Cáo Cá Nhân — Lab Day 09: Multi-Agent Orchestration
 
-**Họ và tên:** ___________  
-**Vai trò trong nhóm:** Supervisor Owner / Worker Owner / MCP Owner / Trace & Docs Owner  
-**Ngày nộp:** ___________  
+**Họ và tên:** Lê Minh Khang
+**Vai trò trong nhóm:** Trace Owner  
+**Ngày nộp:** 4/14/2026
 **Độ dài yêu cầu:** 500–800 từ
 
 ---

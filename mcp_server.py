@@ -29,9 +29,22 @@ Chạy thử:
 """
 
 import os
+import re
+import sys
 import json
+from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+BASE_DIR = Path(__file__).resolve().parent
+DOCS_DIR = BASE_DIR / "data" / "docs"
+
+try:
+    from fastmcp import FastMCP
+    FASTMCP_AVAILABLE = True
+except Exception:
+    FastMCP = None  # type: ignore
+    FASTMCP_AVAILABLE = False
 
 
 # ─────────────────────────────────────────────
@@ -132,38 +145,79 @@ TOOL_SCHEMAS = {
 # Tool Implementations
 # ─────────────────────────────────────────────
 
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z0-9_]+", text.lower())
+
+
+def _lexical_search_docs(query: str, top_k: int = 3) -> list[dict]:
+    """Fallback search nếu ChromaDB chưa có index."""
+    query_terms = set(_tokenize(query))
+    if not query_terms or not DOCS_DIR.exists():
+        return []
+
+    results = []
+    for file_path in DOCS_DIR.glob("*.txt"):
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = file_path.read_text(encoding="utf-8", errors="ignore")
+
+        lowered = text.lower()
+        overlap = sum(1 for term in query_terms if term in lowered)
+        if overlap == 0:
+            continue
+
+        snippet = text[:500].replace("\n", " ").strip()
+        score = round(min(0.95, overlap / max(len(query_terms), 1)), 4)
+        results.append(
+            {
+                "text": snippet,
+                "source": file_path.name,
+                "score": score,
+                "metadata": {"search_type": "lexical_fallback", "matched_terms": overlap},
+            }
+        )
+
+    results.sort(key=lambda item: item["score"], reverse=True)
+    return results[:top_k]
+
+
 def tool_search_kb(query: str, top_k: int = 3) -> dict:
     """
     Tìm kiếm Knowledge Base bằng semantic search.
-
-    TODO Sprint 3: Kết nối với ChromaDB thực.
-    Hiện tại: Delegate sang retrieval worker.
+    Ưu tiên ChromaDB, fallback về lexical search trên thư mục data/docs.
     """
+    chunks = []
+    search_mode = "dense"
+
     try:
-        # Tái dùng retrieval logic từ workers/retrieval.py
-        import sys
-        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, str(BASE_DIR))
         from workers.retrieval import retrieve_dense
+
         chunks = retrieve_dense(query, top_k=top_k)
-        sources = list({c["source"] for c in chunks})
+    except Exception:
+        chunks = []
+
+    if not chunks:
+        search_mode = "lexical_fallback"
+        chunks = _lexical_search_docs(query, top_k=top_k)
+
+    if not chunks:
         return {
-            "chunks": chunks,
-            "sources": sources,
-            "total_found": len(chunks),
+            "chunks": [],
+            "sources": [],
+            "total_found": 0,
+            "search_mode": search_mode,
+            "note": "No matching documents found in the local knowledge base.",
         }
-    except Exception as e:
-        # Fallback: return mock data nếu ChromaDB chưa setup
-        return {
-            "chunks": [
-                {
-                    "text": f"[MOCK] Không thể query ChromaDB: {e}. Kết quả giả lập.",
-                    "source": "mock_data",
-                    "score": 0.5,
-                }
-            ],
-            "sources": ["mock_data"],
-            "total_found": 1,
-        }
+
+    sources = list({c.get("source", "unknown") for c in chunks})
+    return {
+        "chunks": chunks,
+        "sources": sources,
+        "total_found": len(chunks),
+        "search_mode": search_mode,
+    }
 
 
 # Mock ticket database
@@ -290,9 +344,38 @@ TOOL_REGISTRY = {
 def list_tools() -> list:
     """
     MCP discovery: trả về danh sách tools có sẵn.
-    Tương đương với `tools/list` trong MCP protocol.
+    Tương đương với tools/list trong MCP protocol.
     """
     return list(TOOL_SCHEMAS.values())
+
+
+if FASTMCP_AVAILABLE:
+    mcp = FastMCP(
+        name="day09-helpdesk-mcp",
+        instructions="Mock MCP server for Day 09 lab: KB search, ticket lookup, access policy, and mock ticket creation.",
+    )
+
+    @mcp.tool
+    def search_kb(query: str, top_k: int = 3) -> dict:
+        return tool_search_kb(query=query, top_k=top_k)
+
+    @mcp.tool
+    def get_ticket_info(ticket_id: str) -> dict:
+        return tool_get_ticket_info(ticket_id=ticket_id)
+
+    @mcp.tool
+    def check_access_permission(access_level: int, requester_role: str, is_emergency: bool = False) -> dict:
+        return tool_check_access_permission(
+            access_level=access_level,
+            requester_role=requester_role,
+            is_emergency=is_emergency,
+        )
+
+    @mcp.tool
+    def create_ticket(priority: str, title: str, description: str = "") -> dict:
+        return tool_create_ticket(priority=priority, title=title, description=description)
+else:
+    mcp = None
 
 
 def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
@@ -332,33 +415,38 @@ def dispatch_tool(tool_name: str, tool_input: dict) -> dict:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if "--serve" in sys.argv:
+        if mcp is None:
+            print("FastMCP is not available in this environment.")
+            raise SystemExit(1)
+        print("Starting Day 09 MCP server over stdio...")
+        mcp.run()
+        raise SystemExit(0)
+
     print("=" * 60)
-    print("MCP Server — Tool Discovery & Test")
+    print("MCP Server - Tool Discovery & Test")
     print("=" * 60)
 
-    # 1. Discover tools
-    print("\n📋 Available Tools:")
+    print("\nAvailable Tools:")
     for tool in list_tools():
-        print(f"  • {tool['name']}: {tool['description'][:60]}...")
+        print(f"  - {tool['name']}: {tool['description'][:60]}...")
 
-    # 2. Test search_kb
-    print("\n🔍 Test: search_kb")
+    print("\nTest: search_kb")
     result = dispatch_tool("search_kb", {"query": "SLA P1 resolution time", "top_k": 2})
     if result.get("chunks"):
+        print(f"  search_mode: {result.get('search_mode')}")
         for c in result["chunks"]:
             print(f"  [{c.get('score', '?')}] {c.get('source')}: {c.get('text', '')[:70]}...")
     else:
         print(f"  Result: {result}")
 
-    # 3. Test get_ticket_info
-    print("\n🎫 Test: get_ticket_info")
+    print("\nTest: get_ticket_info")
     ticket = dispatch_tool("get_ticket_info", {"ticket_id": "P1-LATEST"})
     print(f"  Ticket: {ticket.get('ticket_id')} | {ticket.get('priority')} | {ticket.get('status')}")
     if ticket.get("notifications_sent"):
         print(f"  Notifications: {ticket['notifications_sent']}")
 
-    # 4. Test check_access_permission
-    print("\n🔐 Test: check_access_permission (Level 3, emergency)")
+    print("\nTest: check_access_permission (Level 3, emergency)")
     perm = dispatch_tool("check_access_permission", {
         "access_level": 3,
         "requester_role": "contractor",
@@ -369,10 +457,10 @@ if __name__ == "__main__":
     print(f"  emergency_override: {perm.get('emergency_override')}")
     print(f"  notes: {perm.get('notes')}")
 
-    # 5. Test invalid tool
-    print("\n❌ Test: invalid tool")
+    print("\nTest: invalid tool")
     err = dispatch_tool("nonexistent_tool", {})
     print(f"  Error: {err.get('error')}")
 
-    print("\n✅ MCP server test done.")
-    print("\nTODO Sprint 3: Implement HTTP server nếu muốn bonus +2.")
+    print("\nMCP server test done.")
+    if mcp is not None:
+        print("Run with --serve to expose the FastMCP server over stdio.")

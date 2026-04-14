@@ -17,8 +17,10 @@ Gọi độc lập để test:
 """
 
 import os
-import sys
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 WORKER_NAME = "policy_tool_worker"
 
@@ -27,34 +29,78 @@ WORKER_NAME = "policy_tool_worker"
 # MCP Client — Sprint 3: Thay bằng real MCP call
 # ─────────────────────────────────────────────
 
+def _get_mcp_mode() -> str:
+    raw_mode = os.getenv("MCP_SERVER_MODE", "mock")
+    return raw_mode.split("#", 1)[0].strip().lower() or "mock"
+
+
 def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
     """
     Gọi MCP tool.
 
-    Sprint 3 TODO: Implement bằng cách import mcp_server hoặc gọi HTTP.
+    Hỗ trợ 2 mode:
+    - mock: import trực tiếp từ mcp_server.py
+    - http: gọi tới MCP_SERVER_URL qua HTTP nếu đã cấu hình
 
-    Hiện tại: Import trực tiếp từ mcp_server.py (trong-process mock).
+    Nếu HTTP thất bại sẽ fallback về mock để pipeline không bị crash.
     """
     from datetime import datetime
 
+    mode = _get_mcp_mode()
+    timestamp = datetime.now().isoformat()
+    last_error = None
+
+    if mode == "http":
+        try:
+            import httpx
+
+            base_url = os.getenv("MCP_SERVER_URL", "http://localhost:8080").rstrip("/")
+            payload = {"tool": tool_name, "input": tool_input}
+            candidate_urls = [
+                f"{base_url}/tools/call",
+                f"{base_url}/tool/{tool_name}",
+                base_url,
+            ]
+
+            for url in candidate_urls:
+                try:
+                    response = httpx.post(url, json=payload, timeout=15.0)
+                    response.raise_for_status()
+                    result = response.json()
+                    return {
+                        "tool": tool_name,
+                        "input": tool_input,
+                        "output": result,
+                        "error": None,
+                        "timestamp": timestamp,
+                        "mode": "http",
+                    }
+                except Exception as exc:
+                    last_error = exc
+        except Exception as exc:
+            last_error = exc
+
     try:
-        # TODO Sprint 3: Thay bằng real MCP client nếu dùng HTTP server
         from mcp_server import dispatch_tool
+
         result = dispatch_tool(tool_name, tool_input)
         return {
             "tool": tool_name,
             "input": tool_input,
             "output": result,
             "error": None,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": timestamp,
+            "mode": "mock" if mode != "http" else "http->mock-fallback",
         }
     except Exception as e:
+        reason = str(last_error or e)
         return {
             "tool": tool_name,
             "input": tool_input,
             "output": None,
-            "error": {"code": "MCP_CALL_FAILED", "reason": str(e)},
-            "timestamp": datetime.now().isoformat(),
+            "error": {"code": "MCP_CALL_FAILED", "reason": reason},
+            "timestamp": timestamp,
+            "mode": mode,
         }
 
 
@@ -182,26 +228,60 @@ def run(state: dict) -> dict:
         if not chunks and needs_tool:
             mcp_result = _call_mcp_tool("search_kb", {"query": task, "top_k": 3})
             state["mcp_tools_used"].append(mcp_result)
-            state["history"].append(f"[{WORKER_NAME}] called MCP search_kb")
+            state["history"].append(
+                f"[{WORKER_NAME}] called MCP search_kb (mode={mcp_result.get('mode', 'unknown')})"
+            )
 
             if mcp_result.get("output") and mcp_result["output"].get("chunks"):
                 chunks = mcp_result["output"]["chunks"]
                 state["retrieved_chunks"] = chunks
+                state["retrieved_sources"] = mcp_result["output"].get("sources", [])
 
         # Step 2: Phân tích policy
         policy_result = analyze_policy(task, chunks)
+        policy_result["mcp_mode"] = _get_mcp_mode()
+        policy_result["mcp_tools_attempted"] = [call.get("tool") for call in state.get("mcp_tools_used", [])]
         state["policy_result"] = policy_result
 
-        # Step 3: Nếu cần thêm info từ MCP (e.g., ticket status), gọi get_ticket_info
-        if needs_tool and any(kw in task.lower() for kw in ["ticket", "p1", "jira"]):
+        # Step 3: Nếu là bài toán access control, gọi check_access_permission
+        task_lower = task.lower()
+        if needs_tool and any(kw in task_lower for kw in ["access", "level 2", "level 3", "cấp quyền", "contractor"]):
+            access_level = 3 if "level 3" in task_lower else 2 if "level 2" in task_lower else 1
+            requester_role = "contractor" if "contractor" in task_lower else "employee"
+            is_emergency = any(kw in task_lower for kw in ["emergency", "khẩn cấp", "p1", "urgent"])
+
+            mcp_result = _call_mcp_tool(
+                "check_access_permission",
+                {
+                    "access_level": access_level,
+                    "requester_role": requester_role,
+                    "is_emergency": is_emergency,
+                },
+            )
+            state["mcp_tools_used"].append(mcp_result)
+            state["policy_result"]["mcp_tools_attempted"].append("check_access_permission")
+            state["history"].append(
+                f"[{WORKER_NAME}] called MCP check_access_permission (mode={mcp_result.get('mode', 'unknown')})"
+            )
+            if mcp_result.get("output"):
+                state["policy_result"]["access_check"] = mcp_result["output"]
+
+        # Step 4: Nếu cần thêm info từ MCP (e.g., ticket status), gọi get_ticket_info
+        if needs_tool and any(kw in task_lower for kw in ["ticket", "p1", "jira"]):
             mcp_result = _call_mcp_tool("get_ticket_info", {"ticket_id": "P1-LATEST"})
             state["mcp_tools_used"].append(mcp_result)
-            state["history"].append(f"[{WORKER_NAME}] called MCP get_ticket_info")
+            state["policy_result"]["mcp_tools_attempted"].append("get_ticket_info")
+            state["history"].append(
+                f"[{WORKER_NAME}] called MCP get_ticket_info (mode={mcp_result.get('mode', 'unknown')})"
+            )
+            if mcp_result.get("output"):
+                state["policy_result"]["ticket_info"] = mcp_result["output"]
 
         worker_io["output"] = {
             "policy_applies": policy_result["policy_applies"],
             "exceptions_count": len(policy_result.get("exceptions_found", [])),
             "mcp_calls": len(state["mcp_tools_used"]),
+            "mcp_mode": _get_mcp_mode(),
         }
         state["history"].append(
             f"[{WORKER_NAME}] policy_applies={policy_result['policy_applies']}, "

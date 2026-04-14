@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-04-14T17:32:38.829705",
+  "day08_results_source": null,
+  "day08_single_agent": {
+    "total_questions": null,
+    "avg_confidence": null,
+    "avg_latency_ms": null,
+    "abstain_rate": null,
+    "multi_hop_accuracy": null
+  },
+  "day09_multi_agent": {
+    "total_traces": 106,
+    "trace_files": 106,
+    "routing_distribution": {
+      "retrieval_worker": "58/106 (54.7%)",
+      "policy_tool_worker": "48/106 (45.3%)"
+    },
+    "routing_counts": {
+      "policy_tool_worker": 48,
+      "retrieval_worker": 58
+    },
+    "avg_confidence": 0.714,
+    "avg_latency_ms": 2653.36,
+    "p50_latency_ms": 0.0,
+    "mcp_usage_rate": "5/106 (4.7%)",
+    "hitl_rate": "9/106 (8.5%)",
+    "abstain_rate": "2/106 (1.9%)",
+    "route_reason_missing_rate": "0/106 (0.0%)",
+    "top_sources": [
+      [
+        "sla_p1_2026.txt",
+        91
+      ],
+      [
+        "it/access-control-sop.md",
+        7
+      ],
+      [
+        "support/sla-p1-2026.pdf",
+        5
+      ],
+      [
+        "policy/refund-v4.pdf",
+        5
+      ],
+      [
+        "hr/leave-policy-2026.pdf",
+        3
+      ],
+      [
+        "support/helpdesk-faq.md",
+        2
+      ]
+    ],
+    "top_mcp_tools": [
+      [
+        "search_kb",
+        5
+      ],
+      [
+        "check_access_permission",
+        1
+      ]
+    ]
+  },
+  "analysis": {
+    "routing_visibility": "Day09 has per-run route_reason and worker sequence in trace.",
+    "confidence_delta_day09_minus_day08": null,
+    "latency_delta_ms_day09_minus_day08": null,
+    "abstain_rate_delta_pp_day09_minus_day08": null,
+    "multi_hop_accuracy_delta_pp_day09_minus_day08": null,
+    "debuggability": "Day09 is easier to debug: can isolate supervisor/retrieval/policy/synthesis from trace and worker-level logs.",
+    "mcp_benefit": "Day09 can extend capability via MCP tools without changing core graph flow.",
+    "baseline_note": "No Day08 baseline file found; pass --day08-results to enable true deltas."
+  }
+}
