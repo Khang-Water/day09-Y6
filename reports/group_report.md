@@ -4,12 +4,13 @@
 **Thành viên:**
 | Tên | Vai trò | GitHub |
 |-----|---------|--------|
-| starwindee | Supervisor Owner | starwindee |
-| diembattu (Dương Khoa Điềm) | Worker Owner (Retrieval) | diembattu |
-| Nguyen Ho Bao Thien | Worker Owner (Policy Tool) | Nguyen Ho Bao Thien |
-| Vo Chung | Worker Owner (Synthesis) | Vo Chung |
-| abcdefya | MCP Owner | abcdefya |
-| khang | Trace & Docs Owner | khang |
+| Hoàng Thị Thanh Tuyền | Supervisor Owner | hoangthanhtuyen1412@gmail.com |
+| Dương Khoa Điềm | Worker Owner (Retrieval) & Docs Owner  | duongkhoadiemp@gmail.com |
+| Nguyễn Hồ Bảo Thiên | Worker Owner (Policy Tool) | thiennguyen3703@gmail.com |
+| Võ Thanh Chung | Worker Owner (Synthesis) | vothanhchung95@gmail.com |
+| Đỗ Thế Anh | MCP Owner | anh.dothe47@gmail.com |
+| Lê Minh Khang | Trace | minhkhangle2k4@gmail.com |
+	
 
 **Ngày nộp:** 2026-04-14  
 **Repo:** https://github.com/Khang-Water/day09-Y6  
@@ -133,12 +134,12 @@ Với các câu đơn giản như gq04 (store credit 110%) hay gq08 (mật khẩ
 
 | Thành viên | Phần đã làm | Sprint |
 |------------|-------------|--------|
-| starwindee | `graph.py` — AgentState, supervisor_node, route_decision, build_graph với LangGraph | Sprint 1 |
-| diembattu (Dương Khoa Điềm) | `workers/retrieval.py` — dense retrieval, ChromaDB integration, Azure embedding config | Sprint 2 |
-| Nguyen Ho Bao Thien | `workers/policy_tool.py` — rule-based exceptions, MCP tool calls, access control | Sprint 2+3 |
-| Vo Chung | `workers/synthesis.py` — LLM grounding, confidence estimation, HITL trigger | Sprint 2 |
-| abcdefya | `mcp_server.py` — 4 tools, FastMCP integration, lexical fallback search | Sprint 3 |
-| khang | `eval_trace.py`, trace files, eval_report.json, project initialization | Sprint 4 |
+| Hoàng Thị Thanh Tuyền | `graph.py` — AgentState, supervisor_node, route_decision, build_graph với LangGraph | Sprint 1 |
+| Dương Khoa Điềm | `workers/retrieval.py` — dense retrieval, ChromaDB integration, Azure embedding config | Sprint 2 |
+| Nguyễn Hồ Bảo Thiên | `workers/policy_tool.py` — rule-based exceptions, MCP tool calls, access control | Sprint 2+3 |
+| Võ Thanh Chung | `workers/synthesis.py` — LLM grounding, confidence estimation, HITL trigger | Sprint 2 |
+| Đỗ Thế Anh | `mcp_server.py` — 4 tools, FastMCP integration, lexical fallback search | Sprint 3 |
+| Lê Minh Khang | `eval_trace.py`, trace files, eval_report.json, project initialization | Sprint 4 |
 
 **Điều nhóm làm tốt:**
 
