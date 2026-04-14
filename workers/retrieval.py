@@ -1,4 +1,5 @@
-"""
+# DƯƠNG KHOA ĐIỀM - 2A202600366
+""" 
 workers/retrieval.py — Retrieval Worker
 Sprint 2: Implement retrieval từ ChromaDB, trả về chunks + sources.
 
