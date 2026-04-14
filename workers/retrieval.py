@@ -17,13 +17,13 @@ Gọi độc lập để test:
 
 import os
 import sys
-
+from dotenv import load_dotenv
 # ─────────────────────────────────────────────
 # Worker Contract (xem contracts/worker_contracts.yaml)
 # Input:  {"task": str, "top_k": int = 3}
 # Output: {"retrieved_chunks": list, "retrieved_sources": list, "error": dict | None}
 # ─────────────────────────────────────────────
-
+load_dotenv()
 WORKER_NAME = "retrieval_worker"
 DEFAULT_TOP_K = 3
 
@@ -31,9 +31,24 @@ DEFAULT_TOP_K = 3
 def _get_embedding_fn():
     """
     Trả về embedding function.
-    TODO Sprint 1: Implement dùng OpenAI hoặc Sentence Transformers.
+    Đã implement dùng Sentence Transformers hoặc OpenAI.
     """
-    # Option A: Sentence Transformers (offline, không cần API key)
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    # Option B: OpenAI (cần API key, ưu tiên vì rag_lab là 1536 dims)
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url="https://models.inference.ai.azure.com")
+            def embed(text: str) -> list:
+                resp = client.embeddings.create(input=text, model="text-embedding-3-small")
+                return resp.data[0].embedding
+            return embed
+        except ImportError:
+            pass
+
+    # Option A: Sentence Transformers (offline)
     try:
         from sentence_transformers import SentenceTransformer
         model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -43,41 +58,30 @@ def _get_embedding_fn():
     except ImportError:
         pass
 
-    # Option B: OpenAI (cần API key)
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        def embed(text: str) -> list:
-            resp = client.embeddings.create(input=text, model="text-embedding-3-small")
-            return resp.data[0].embedding
-        return embed
-    except ImportError:
-        pass
-
     # Fallback: random embeddings cho test (KHÔNG dùng production)
     import random
     def embed(text: str) -> list:
         return [random.random() for _ in range(384)]
-    print("⚠️  WARNING: Using random embeddings (test only). Install sentence-transformers.")
+    print("WARNING: Using random embeddings (test only). Install sentence-transformers.")
     return embed
 
 
 def _get_collection():
     """
     Kết nối ChromaDB collection.
-    TODO Sprint 2: Đảm bảo collection đã được build từ Step 3 trong README.
+    Collection được sử dụng là rag_lab.
     """
     import chromadb
     client = chromadb.PersistentClient(path="./chroma_db")
     try:
-        collection = client.get_collection("day09_docs")
+        collection = client.get_collection("rag_lab")
     except Exception:
         # Auto-create nếu chưa có
         collection = client.get_or_create_collection(
-            "day09_docs",
+            "rag_lab",
             metadata={"hnsw:space": "cosine"}
         )
-        print(f"⚠️  Collection 'day09_docs' chưa có data. Chạy index script trong README trước.")
+        print(f"WARNING: Collection 'rag_lab' chưa có data. Vui lòng check lại DB.")
     return collection
 
 
@@ -85,15 +89,11 @@ def retrieve_dense(query: str, top_k: int = DEFAULT_TOP_K) -> list:
     """
     Dense retrieval: embed query → query ChromaDB → trả về top_k chunks.
 
-    TODO Sprint 2: Implement phần này.
-    - Dùng _get_embedding_fn() để embed query
-    - Query collection với n_results=top_k
-    - Format result thành list of dict
+    Đã implement bằng cách dùng _get_embedding_fn() để query ChromaDB.
 
     Returns:
         list of {"text": str, "source": str, "score": float, "metadata": dict}
     """
-    # TODO: Implement dense retrieval
     embed = _get_embedding_fn()
     query_embedding = embed(query)
 
@@ -120,7 +120,7 @@ def retrieve_dense(query: str, top_k: int = DEFAULT_TOP_K) -> list:
         return chunks
 
     except Exception as e:
-        print(f"⚠️  ChromaDB query failed: {e}")
+        print(f"WARNING: ChromaDB query failed: {e}")
         # Fallback: return empty (abstain)
         return []
 
@@ -185,7 +185,7 @@ def run(state: dict) -> dict:
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("Retrieval Worker — Standalone Test")
+    print("Retrieval Worker - Standalone Test")
     print("=" * 50)
 
     test_queries = [
@@ -195,7 +195,7 @@ if __name__ == "__main__":
     ]
 
     for query in test_queries:
-        print(f"\n▶ Query: {query}")
+        print(f"\n-> Query: {query}")
         result = run({"task": query})
         chunks = result.get("retrieved_chunks", [])
         print(f"  Retrieved: {len(chunks)} chunks")
@@ -203,4 +203,4 @@ if __name__ == "__main__":
             print(f"    [{c['score']:.3f}] {c['source']}: {c['text'][:80]}...")
         print(f"  Sources: {result.get('retrieved_sources', [])}")
 
-    print("\n✅ retrieval_worker test done.")
+    print("\n[OK] retrieval_worker test done.")
