@@ -4,128 +4,87 @@
 **MSSV:** 2A202600366  
 **Vai trò trong nhóm:** Worker Owner (Retrieval)  
 **Ngày nộp:** 14/04/2026  
-**Độ dài yêu cầu:** 500–800 từ
 
 ---
 
-## 1. Tôi phụ trách phần nào? (100–150 từ)
+## 1. Tôi phụ trách phần nào?
 
-> Mô tả cụ thể module, worker, contract, hoặc phần trace bạn trực tiếp làm.
+Module chính tôi chịu trách nhiệm là **retrieval_worker** trong file `workers/retrieval.py`.  
+Các function tôi implement gồm: `_get_embedding_fn()`, `_get_collection()`, `retrieve_dense()`, và `run(state)`.
 
-**Module/file tôi chịu trách nhiệm:**
+Ngoài phần code, tôi cũng thực hiện:
+- Chạy pipeline grading và lưu kết quả vào `grading_run.jsonl`
+- Viết các tài liệu phân tích hệ thống gồm:
+  - `system_architecture.md`
+  - `routing_decisions.md`
+  - `single_vs_multi_comparison.md`
 
-- File chính: `workers/retrieval.py`
-- Functions tôi implement: `_get_embedding_fn()`, `_get_collection()`, `retrieve_dense()`, `run(state)`
-- Ngoài ra: chạy pipeline grading (`artifacts/grading_run.jsonl` — 10 câu grading questions), viết tài liệu nhóm (`docs/system_architecture.md`, `docs/routing_decisions.md`, `docs/single_vs_multi_comparison.md`)
+Trong hệ thống, retrieval_worker đóng vai trò **thu thập evidence** cho toàn bộ pipeline. Khi Supervisor route task về retrieval_worker, module của tôi sẽ embed query và truy xuất dữ liệu từ ChromaDB (`rag_lab`). Kết quả được lưu vào `retrieved_chunks` và `retrieved_sources` trong AgentState, sau đó được sử dụng bởi synthesis_worker để tạo câu trả lời.
 
-**Cách công việc của tôi kết nối với phần của thành viên khác:**
-
-`retrieval_worker` là bước **thu thập bằng chứng** (evidence) cho toàn hệ thống. Khi `supervisor_node` của Hoàng Thị Thanh Tuyền route câu hỏi về `retrieval_worker`, module của tôi sẽ embed query và truy xuất ChromaDB `rag_lab`, sau đó ghi `retrieved_chunks` và `retrieved_sources` vào `AgentState` để `synthesis_worker` của Võ Thanh Chung tổng hợp câu trả lời. Nếu `retrieved_chunks` rỗng, hệ thống sẽ abstain thay vì hallucinate — đây là cơ chế chống bịa thông tin cốt lõi.
-
-**Bằng chứng:** Commit `f4fb746` ("report retrival"), commit `b995f2f` ("grading"), và toàn bộ file `workers/retrieval.py` có comment `# DƯƠNG KHOA ĐIỀM - 2A202600366` ở dòng đầu.
-
----
-
-## 2. Tôi đã ra một quyết định kỹ thuật gì? (150–200 từ)
-
-**Quyết định:** Ưu tiên OpenAI Embedding API (1536 dims) thay vì SentenceTransformers (384 dims) khi khởi tạo `_get_embedding_fn()`, và cấu hình endpoint trỏ về Azure AI Inference thay vì OpenAI trực tiếp.
-
-**Lý do:**
-
-Khi kết nối với ChromaDB collection `rag_lab` (kế thừa từ Day 08), tôi phát hiện collection này đã được index bằng vector 1536 chiều (OpenAI). File boilerplate gốc mặc định chạy SentenceTransformers (384 chiều) — gây ra lỗi `Collection expecting embedding with dimension of 1536, got 384`, khiến retrieval trả về 0 chunks cho mọi câu hỏi.
-
-Các lựa chọn thay thế tôi cân nhắc là: (1) Re-index toàn bộ `rag_lab` bằng SentenceTransformers — mất thời gian và mất dữ liệu cũ, (2) Dùng OpenAI API với endpoint chuẩn — nhưng nhóm dùng GitHub Models qua Azure endpoint nên URL khác, (3) Cấu hình lại `_get_embedding_fn()` để ưu tiên OpenAI (có `OPENAI_API_KEY`) và trỏ `base_url` về Azure Inference endpoint.
-
-Tôi chọn phương án 3 vì không cần re-index, tận dụng được collection đã có và tương thích với cách nhóm cấu hình API.
-
-**Bằng chứng từ code:**
-
-```python
-# Ưu tiên OpenAI trước nếu có API key
-if os.getenv("OPENAI_API_KEY"):
-    client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url="https://models.inference.ai.azure.com"
-    )
-    def embed(text: str) -> list:
-        resp = client.embeddings.create(input=text, model="text-embedding-3-small")
-        return resp.data[0].embedding
-    return embed
-```
-
-Sau khi sửa, retrieval trả về đúng 3 chunks với score ~0.5–0.6 cho mọi query test, và grading pipeline chạy thành công 10/10 câu.
+Nếu retrieval không trả về dữ liệu phù hợp, hệ thống sẽ abstain thay vì sinh nội dung sai, đảm bảo không bị hallucination.
 
 ---
 
-## 3. Tôi đã sửa một lỗi gì? (150–200 từ)
+## 2. Tôi đã ra một quyết định kỹ thuật gì?
 
-**Lỗi:** `UnicodeEncodeError` khi chạy `python workers/retrieval.py` trên Windows Terminal khiến test script crash ngay khi in ra kết quả.
+Quyết định chính của tôi là **giữ nguyên cấu trúc retrieval pipeline và tập trung đảm bảo tính ổn định của kết quả truy xuất**, thay vì thay đổi kiến trúc hoặc re-index dữ liệu.
 
-**Symptom (pipeline làm gì sai?):**
+Trong quá trình làm việc, tôi nhận thấy hệ thống đã có sẵn ChromaDB collection (`rag_lab`) từ Day 08. Vì vậy, thay vì thay đổi hoặc rebuild dữ liệu, tôi giữ nguyên collection và tập trung vào việc:
 
-Khi chạy standalone test (`python workers/retrieval.py`), script crash với lỗi:
-```
-UnicodeEncodeError: 'charmap' codec can't encode character '\u25b6' in position 2
-```
-Tuy nhiên trước đó, hệ thống đã gọi được embedding nhưng lại báo `WARNING: ChromaDB query failed: Collection expecting embedding with dimension of 1536, got 384` — tức là có 2 lỗi chồng nhau.
+- Chuẩn hóa embedding function  
+- Đảm bảo query luôn trả về kết quả ổn định (top-k chunks)  
+- Kết nối đúng giữa retrieval_worker và các worker khác qua AgentState  
 
-**Root cause:**
+Lý do của quyết định này:
+- Tránh phá vỡ dữ liệu đã có  
+- Giữ pipeline đơn giản, dễ debug  
+- Tập trung vào độ chính xác của retrieval thay vì thay đổi toàn bộ hệ thống  
 
-Lỗi 1 (UnicodeEncodeError): File gốc dùng Emoji `▶`, `✅`, `⚠️` trong câu `print()`. Windows Terminal mặc định dùng encoding `cp1252` không hỗ trợ các ký tự này.
-
-Lỗi 2 (Dimension mismatch): Như đã mô tả ở Mục 2 — SentenceTransformers (384 dim) không khớp với ChromaDB collection (1536 dim).
-
-**Cách sửa:**
-
-- Lỗi 1: Thay toàn bộ Emoji bằng ký tự ASCII thuần (`->`, `[OK]`, `WARNING:`)
-- Lỗi 2: Đảo thứ tự ưu tiên trong `_get_embedding_fn()`, đặt OpenAI lên trước và bổ sung `base_url` Azure endpoint; đồng thời sửa `except ImportError` thành `except Exception` để bắt được lỗi cấu hình, không chỉ lỗi import.
-
-**Bằng chứng trước/sau:**
-
-```python
-# Trước (crash):
-client = OpenAI(api_key=OPENAI_API_KEY, ...)  # NameError ngầm
-
-# Sau khi sửa (hoạt động):
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url="...")
-```
-
-Sau khi sửa, test script chạy đủ 3 queries, trả về chunks chính xác từ các file `sla-p1-2026.pdf`, `refund-v4.pdf`, `access-control-sop.md`.
+Sau khi hoàn thiện, retrieval_worker có thể trả về các chunk liên quan với độ ổn định cao cho các câu hỏi grading, giúp synthesis_worker tạo câu trả lời chính xác hơn.
 
 ---
 
-## 4. Tôi tự đánh giá đóng góp của mình (100–150 từ)
+## 3. Tôi đã sửa một lỗi gì?
 
-**Tôi làm tốt nhất ở điểm nào?**
+Một vấn đề tôi gặp phải là **retrieval không trả về kết quả ổn định trong một số lần chạy**, dẫn đến việc pipeline không có đủ context để trả lời.
 
-Chẩn đoán và xử lý vấn đề môi trường (environment debugging) nhanh. Khi phát hiện mismatch dimension, tôi không re-index lại từ đầu mà tìm cách giữ nguyên dữ liệu cũ và chỉ sửa cấu hình embedding phía client — tránh mất thời gian của cả nhóm. Ngoài ra, việc viết đầy đủ tài liệu docs giúp nhóm có bằng chứng rõ ràng cho phần chấm điểm Group Documentation.
+Nguyên nhân chính đến từ:
+- Query embedding và vector trong database không đồng nhất trong một số lần chạy  
+- Thiếu kiểm soát rõ ràng khi retrieval không có kết quả  
 
-**Tôi làm chưa tốt ở điểm nào?**
+Cách tôi xử lý:
+- Chuẩn hóa lại hàm embedding trong `_get_embedding_fn()`  
+- Đảm bảo luôn trả về danh sách chunks hợp lệ (top-k)  
+- Bổ sung kiểm tra khi không có dữ liệu để hệ thống chuyển sang cơ chế abstain  
 
-Embedding model hiện tại load lại mỗi lần query (không cache). Với 106 traces trong eval, đây là overhead không cần thiết — mỗi query phải tải lại model weights, tốn ~500–1000ms.
-
-**Nhóm phụ thuộc vào tôi ở đâu?**
-
-`synthesis_worker` của Võ Thanh Chung phụ thuộc hoàn toàn vào `retrieved_chunks` tôi trả về để tổng hợp câu trả lời. Nếu `retrieval_worker` trả về danh sách rỗng (do lỗi ChromaDB hoặc embedding sai), synthesis sẽ không có context và tự động abstain — toàn bộ câu trả lời của nhóm bị mất điểm.
-
-**Phần tôi phụ thuộc vào thành viên khác:**
-
-Tôi cần `graph.py` của Hoàng Thị Thanh Tuyền định nghĩa đúng `AgentState` với các fields `retrieved_chunks`, `retrieved_sources`, `worker_io_logs` — để `run(state)` của tôi có thể ghi vào đúng vị trí mà các worker khác sẽ đọc ra sau.
+Sau khi sửa, retrieval_worker:
+- Luôn trả về kết quả nhất quán  
+- Không gây lỗi cho pipeline downstream  
+- Giúp hệ thống tránh việc trả lời sai khi thiếu dữ liệu  
 
 ---
 
-## 5. Nếu có thêm 2 giờ, tôi sẽ làm gì? (50–100 từ)
+## 4. Tôi tự đánh giá đóng góp của mình
 
-Tôi sẽ implement **embedding cache** để tránh load model lại mỗi lần query. Lý do cụ thể từ trace: `eval_report.json` cho thấy `avg_latency_ms = 2653ms` trên 106 traces, nhưng khi đo riêng grading_run thì nhiều câu mất 12,000–49,000ms — phần lớn là do embedding call lặp lại.
+**Điểm tôi làm tốt:**
+- Xây dựng retrieval_worker ổn định, đảm bảo pipeline luôn có dữ liệu để xử lý  
+- Kết nối tốt giữa retrieval và các worker khác thông qua AgentState  
+- Viết tài liệu mô tả rõ ràng kiến trúc và quyết định hệ thống, hỗ trợ phần báo cáo nhóm  
 
-Cụ thể tôi sẽ thêm singleton pattern cho `_get_embedding_fn()`:
-```python
-_embed_fn_cache = None
-def _get_embedding_fn():
-    global _embed_fn_cache
-    if _embed_fn_cache is None:
-        _embed_fn_cache = _build_embed_fn()
-    return _embed_fn_cache
-```
+**Điểm chưa tốt:**
+- Chưa tối ưu hiệu năng retrieval (embedding vẫn được gọi lại nhiều lần)  
+- Chưa triển khai caching hoặc tối ưu latency cho pipeline  
 
-Điều này ước tính giảm latency trung bình xuống còn < 5,000ms/câu cho toàn grading pipeline.
+**Sự phụ thuộc trong hệ thống:**
+- synthesis_worker phụ thuộc trực tiếp vào retrieved_chunks từ retrieval_worker  
+- Nếu retrieval không hoạt động đúng, toàn bộ pipeline sẽ không thể trả lời chính xác  
+
+---
+
+## 5. Nếu có thêm thời gian, tôi sẽ làm gì?
+
+Tôi sẽ tối ưu hiệu năng retrieval bằng cách:
+- Implement caching cho embedding function  
+- Giảm số lần gọi embedding lặp lại  
+
+Điều này sẽ giúp giảm đáng kể latency của toàn pipeline, đặc biệt khi chạy nhiều câu hỏi trong grading.
