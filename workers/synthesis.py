@@ -1,4 +1,5 @@
 """
+VÕ THANH CHUNG - 2A202600335
 workers/synthesis.py — Synthesis Worker
 Sprint 2: Tổng hợp câu trả lời từ retrieved_chunks và policy_result.
 
