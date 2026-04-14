@@ -142,9 +142,9 @@ def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
             "role": "user",
             "content": f"""Câu hỏi: {task}
 
-            {context}
-            
-            Hãy trả lời câu hỏi dựa vào tài liệu trên."""
+{context}
+
+Hãy trả lời câu hỏi dựa vào tài liệu trên."""
         }
     ]
 
@@ -260,8 +260,6 @@ if __name__ == "__main__":
     result2 = run(test_state2.copy())
     print(f"\nAnswer:\n{result2['final_answer']}")
     print(f"Confidence: {result2['confidence']}")
-
-    print("\n✅ synthesis_worker test done.")
 
     print("\n--- Test 3: Abstain case (no chunks) ---")
     test_state3 = {
