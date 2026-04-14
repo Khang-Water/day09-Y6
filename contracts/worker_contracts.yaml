@@ -8,7 +8,7 @@
 # TODO Sprint 2: Cập nhật "actual_implementation" khi đã implement xong.
 
 version: "1.0"
-updated_at: "2026-04-13"
+updated_at: "2026-04-14"
 
 # ─────────────────────────────────────────────
 # Supervisor
@@ -107,67 +107,106 @@ policy_tool_worker:
   name: policy_tool_worker
   file: workers/policy_tool.py
   description: "Kiểm tra policy và xử lý exceptions. Có thể gọi MCP tools khi cần."
+  
   input:
-    task:
-      type: string
-      required: true
-    retrieved_chunks:
-      type: array
-      required: false
-      description: "Context từ retrieval_worker (nếu đã có)"
-    needs_tool:
-      type: boolean
-      required: false
-      default: false
-      description: "True → worker được phép gọi MCP tools"
+    type: object
+    properties:
+      task:
+        type: string
+        required: true
+      retrieved_chunks:
+        type: array
+        required: false
+        description: "Context từ retrieval_worker (nếu đã có)"
+      needs_tool:
+        type: boolean
+        required: false
+        default: false
+        description: "True → worker được phép gọi MCP tools"
+        
   output:
-    policy_result:
-      type: object
-      required: true
-      properties:
-        policy_applies:
-          type: boolean
-          description: "True nếu policy cho phép, False nếu bị chặn"
-        policy_name:
-          type: string
-          example: "refund_policy_v4"
-        exceptions_found:
-          type: array
-          description: "Danh sách exceptions tìm thấy"
-          items:
-            type: object
-            properties:
-              type: string  # e.g., "flash_sale_exception"
-              rule: string  # Câu policy rule cụ thể
-              source: string
-        source:
-          type: array
-          description: "Nguồn tài liệu đã dùng"
-        policy_version_note:
-          type: string
-          description: "Note về version nếu có vấn đề temporal scoping"
-    mcp_tools_used:
-      type: array
-      description: "Danh sách MCP tool calls thực hiện"
-      items:
-        tool: string
-        input: object
-        output: object
-        error: object | null
-        timestamp: string
-    worker_io_logs:
-      type: array
-      required: true
+    type: object
+    properties:
+      policy_result:
+        type: object
+        required: true
+        properties:
+          policy_applies:
+            type: boolean
+            description: "True nếu policy cho phép, False nếu bị chặn"
+          policy_name:
+            type: string
+            example: "refund_policy_v4"
+          exceptions_found:
+            type: array
+            description: "Danh sách exceptions tìm thấy"
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                  example: "flash_sale_exception"
+                rule:
+                  type: string
+                  description: "Câu policy rule cụ thể"
+                source:
+                  type: string
+          source:
+            type: array
+            description: "Nguồn tài liệu đã dùng"
+            items:
+              type: string
+          policy_version_note:
+            type: string
+            description: "Note về version nếu có vấn đề temporal scoping"
+          explanation:
+            type: string
+            description: "Giải thích kết quả phân tích (Rule-based + LLM)"
+
+      mcp_tools_used:
+        type: array
+        description: "Danh sách MCP tool calls thực hiện"
+        items:
+          type: object
+          properties:
+            tool:
+              type: string
+            input:
+              type: object
+            output:
+              type: object
+            error:
+              type: object
+              nullable: true
+            timestamp:
+              type: string
+              format: date-time
+              
+      worker_io_logs:
+        type: array
+        required: true
+        items:
+          type: object
+
   error_format:
-    code: "POLICY_CHECK_FAILED"
-    reason: string
+    type: object
+    properties:
+      code:
+        type: string
+        example: "POLICY_CHECK_FAILED"
+      reason:
+        type: string
+        
   constraints:
     - "Phải detect exception cases: flash_sale, digital_product, activated_product"
+    - "Phải check ngày tháng đơn hàng trước 01/02/2026 (policy v3)"
     - "Phải ghi tên MCP tool đã gọi vào mcp_tools_used"
     - "Không được tự bịa policy rules không có trong tài liệu"
+    
   actual_implementation:
-    status: "TODO Sprint 2"
-    notes: ""
+    status: "Done"
+    sprint_2: "Đã tích hợp Rule-based check kết hợp với LLM phân tích chuyên sâu."
+    sprint_3: "Đã thay thế mock function bằng real MCP call qua HTTP (requests)."
 
 # ─────────────────────────────────────────────
 # Synthesis Worker
