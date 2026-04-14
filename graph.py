@@ -16,6 +16,7 @@ from typing import TypedDict, Literal, Optional
 
 # Đã dùng LangGraph:
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
 # ─────────────────────────────────────────────
 # 1. Shared State — dữ liệu đi xuyên toàn graph
@@ -140,21 +141,13 @@ def route_decision(state: AgentState) -> Literal["retrieval_worker", "policy_too
 
 def human_review_node(state: AgentState) -> AgentState:
     """
-    HITL node: pause và chờ human approval.
-    Trong lab này, implement dưới dạng placeholder (in ra warning).
-
-    TODO Sprint 3 (optional): Implement actual HITL với interrupt_before hoặc
-    breakpoint nếu dùng LangGraph.
+    HITL node: Được chạy sau khi graph được resume từ interrupt_before.
     """
     state["hitl_triggered"] = True
-    state["history"].append("[human_review] HITL triggered — awaiting human input")
+    state["history"].append("[human_review] HITL processed and approved")
     state["workers_called"].append("human_review")
 
-    # Placeholder: tự động approve để pipeline tiếp tục
-    print(f"\n⚠️  HITL TRIGGERED")
-    print(f"   Task: {state['task']}")
-    print(f"   Reason: {state['route_reason']}")
-    print(f"   Action: Auto-approving in lab mode (set hitl_triggered=True)\n")
+    print(f"\n✅ [Human Review Node] Đã qua xử lý phê duyệt từ người quản trị.")
 
     # Sau khi human approve, route về retrieval để lấy evidence
     state["supervisor_route"] = "retrieval_worker"
@@ -168,57 +161,30 @@ def human_review_node(state: AgentState) -> AgentState:
 # ─────────────────────────────────────────────
 
 # TODO Sprint 2: Uncomment sau khi implement workers
-# from workers.retrieval import run as retrieval_run
-# from workers.policy_tool import run as policy_tool_run
-# from workers.synthesis import run as synthesis_run
+from workers.retrieval import run as retrieval_run
+from workers.policy_tool import run as policy_tool_run
+from workers.synthesis import run as synthesis_run
 
 
 def retrieval_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi retrieval worker."""
-    # TODO Sprint 2: Thay bằng retrieval_run(state)
     state["workers_called"].append("retrieval_worker")
     state["history"].append("[retrieval_worker] called")
-
-    # Placeholder output để test graph chạy được
-    state["retrieved_chunks"] = [
-        {"text": "SLA P1: phản hồi 15 phút, xử lý 4 giờ.", "source": "sla_p1_2026.txt", "score": 0.92}
-    ]
-    state["retrieved_sources"] = ["sla_p1_2026.txt"]
-    state["history"].append(f"[retrieval_worker] retrieved {len(state['retrieved_chunks'])} chunks")
-    return state
+    return retrieval_run(state)
 
 
 def policy_tool_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi policy/tool worker."""
-    # TODO Sprint 2: Thay bằng policy_tool_run(state)
     state["workers_called"].append("policy_tool_worker")
     state["history"].append("[policy_tool_worker] called")
-
-    # Placeholder output
-    state["policy_result"] = {
-        "policy_applies": True,
-        "policy_name": "refund_policy_v4",
-        "exceptions_found": [],
-        "source": "policy_refund_v4.txt",
-    }
-    state["history"].append("[policy_tool_worker] policy check complete")
-    return state
+    return policy_tool_run(state)
 
 
 def synthesis_worker_node(state: AgentState) -> AgentState:
     """Wrapper gọi synthesis worker."""
-    # TODO Sprint 2: Thay bằng synthesis_run(state)
     state["workers_called"].append("synthesis_worker")
     state["history"].append("[synthesis_worker] called")
-
-    # Placeholder output
-    chunks = state.get("retrieved_chunks", [])
-    sources = state.get("retrieved_sources", [])
-    state["final_answer"] = f"[PLACEHOLDER] Câu trả lời được tổng hợp từ {len(chunks)} chunks."
-    state["sources"] = sources
-    state["confidence"] = 0.75
-    state["history"].append(f"[synthesis_worker] answer generated, confidence={state['confidence']}")
-    return state
+    return synthesis_run(state)
 
 
 # ─────────────────────────────────────────────
@@ -273,12 +239,32 @@ def build_graph():
 
     workflow.add_edge("synthesis_worker", END)
 
-    app = workflow.compile()
+    memory = MemorySaver()
+    app = workflow.compile(checkpointer=memory, interrupt_before=["human_review"])
 
     def run(state: AgentState) -> AgentState:
         import time
         start = time.time()
-        result = app.invoke(state)
+        
+        config = {"configurable": {"thread_id": state["run_id"]}}
+        result = app.invoke(state, config)
+        
+        # Checkpoint loop cho HITL
+        snapshot = app.get_state(config)
+        if snapshot.next and "human_review" in snapshot.next:
+            print(f"\n⚠️  HITL TRIGGERED (Breakpoint)")
+            print(f"   Task: {snapshot.values.get('task')}")
+            print(f"   Reason: {snapshot.values.get('route_reason')}")
+            
+            user_input = input("   👉 Nhấn Enter để tự động duyệt, hoặc nhập chỉ dẫn mới: ")
+            
+            if user_input.strip():
+                new_task = snapshot.values.get("task", "") + f" [Human: {user_input}]"
+                app.update_state(config, {"task": new_task}, as_node="supervisor")
+            
+            # Resume graph từ breakpoint
+            result = app.invoke(None, config)
+            
         result["latency_ms"] = int((time.time() - start) * 1000)
         result["history"].append(f"[graph] completed in {result['latency_ms']}ms")
         return result
