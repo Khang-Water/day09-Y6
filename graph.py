@@ -167,9 +167,8 @@ from workers.synthesis import run as synthesis_run
 
 
 def retrieval_worker_node(state: AgentState) -> AgentState:
-    """Wrapper gọi retrieval worker."""
     state["workers_called"].append("retrieval_worker")
-    state["history"].append("[retrieval_worker] called")
+    state["history"].append(f"[retrieval_worker] called | route_reason={state['route_reason']}")
     return retrieval_run(state)
 
 
