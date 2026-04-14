@@ -1,0 +1,76 @@
+{
+  "task": "SLA xử lý ticket P1 là bao lâu?",
+  "route_reason": "task contains retrieval keywords (P1/escalation/ticket/SLA) - priority | risk_high flagged",
+  "risk_high": true,
+  "needs_tool": false,
+  "hitl_triggered": false,
+  "retrieved_chunks": [
+    {
+      "text": "Ticket P1:\n- Phản hồi ban đầu (first response): 15 phút kể từ khi ticket được tạo.\n- Xử lý và khắc phục (resolution): 4 giờ.\n- Escalation: Tự động escalate lên Senior Engineer nếu không có phản hồi trong 10 phút.\n- Thông báo stakeholder: Ngay khi nhận ticket, update mỗi 30 phút cho đến khi resolve.\n\nTicket P2:\n- Phản hồi ban đầu: 2 giờ.\n- Xử lý và khắc phục: 1 ngày làm việc.\n- Escalation: Tự động escalate sau 90 phút không có phản hồi.\n\nTicket P3:\n- Phản hồi ban đầu: 1 ngày làm việc.\n- Xử lý và khắc phục: 5 ngày làm việc.\n\nTicket P4:\n- Phản hồi ban đầu: 3 ngày làm việc.\n- Xử lý và khắc phục: Theo sprint cycle (thông thường 2-4 tuần).",
+      "source": "support/sla-p1-2026.pdf",
+      "score": 0.6181,
+      "metadata": {
+        "source": "support/sla-p1-2026.pdf",
+        "access": "internal",
+        "effective_date": "2026-01-15",
+        "section": "Phần 2: SLA theo mức độ ưu tiên",
+        "department": "IT"
+      }
+    },
+    {
+      "text": "Bước 1: Tiếp nhận\nOn-call engineer nhận alert hoặc ticket, xác nhận severity trong 5 phút.\n\nBước 2: Thông báo\nGửi thông báo tới Slack #incident-p1 và email incident@company.internal ngay lập tức.\n\nBước 3: Triage và phân công\nLead Engineer phân công engineer xử lý trong 10 phút.\n\nBước 4: Xử lý\nEngineer cập nhật tiến độ lên ticket mỗi 30 phút. Nếu cần hỗ trợ thêm, escalate ngay.\n\nBước 5: Resolution\nSau khi khắc phục, viết incident report trong vòng 24 giờ.",
+      "source": "support/sla-p1-2026.pdf",
+      "score": 0.4849,
+      "metadata": {
+        "access": "internal",
+        "section": "Phần 3: Quy trình xử lý sự cố P1",
+        "effective_date": "2026-01-15",
+        "source": "support/sla-p1-2026.pdf",
+        "department": "IT"
+      }
+    },
+    {
+      "text": "Bước 1: Khách hàng gửi yêu cầu qua hệ thống ticket nội bộ với category \"Refund Request\".\nBước 2: CS Agent xem xét trong vòng 1 ngày làm việc và xác nhận điều kiện đủ điều kiện.\nBước 3: Nếu đủ điều kiện, chuyển yêu cầu sang Finance Team để xử lý hoàn tiền.\nBước 4: Finance Team xử lý trong 3-5 ngày làm việc và thông báo kết quả cho khách hàng.",
+      "source": "policy/refund-v4.pdf",
+      "score": 0.4684,
+      "metadata": {
+        "section": "Điều 4: Quy trình xử lý yêu cầu hoàn tiền",
+        "access": "internal",
+        "effective_date": "2026-02-01",
+        "department": "CS",
+        "source": "policy/refund-v4.pdf"
+      }
+    }
+  ],
+  "retrieved_sources": [
+    "support/sla-p1-2026.pdf",
+    "policy/refund-v4.pdf"
+  ],
+  "policy_result": {},
+  "mcp_tools_used": [],
+  "final_answer": "Dựa vào tài liệu nội bộ, SLA xử lý ticket P1 được quy định như sau:\n\n*   **Phản hồi ban đầu (First Response):** 15 phút kể từ khi ticket được tạo. [support/sla-p1-2026.pdf]\n*   **Xử lý và khắc phục (Resolution):** 4 giờ. [support/sla-p1-2026.pdf]\n\n**Ngoại lệ / Quy trình bổ sung:**\n*   Ticket sẽ tự động được escalate lên Senior Engineer nếu không có phản hồi trong vòng 10 phút. [support/sla-p1-2026.pdf]\n*   Trong quá trình xử lý, cần cập nhật tiến độ lên ticket mỗi 30 phút. [support/sla-p1-2026.pdf]",
+  "sources": [
+    "support/sla-p1-2026.pdf",
+    "policy/refund-v4.pdf"
+  ],
+  "confidence": 0.52,
+  "history": [
+    "[supervisor] received task: SLA xử lý ticket P1 là bao lâu?",
+    "[supervisor] route=retrieval_worker reason=task contains retrieval keywords (P1/escalation/ticket/SLA) - priority | risk_high flagged",
+    "[retrieval_worker] called | route_reason=task contains retrieval keywords (P1/escalation/ticket/SLA) - priority | risk_high flagged",
+    "[retrieval_worker] retrieved 3 chunks from ['support/sla-p1-2026.pdf', 'policy/refund-v4.pdf']",
+    "[synthesis_worker] called",
+    "[synthesis_worker] answer generated, confidence=0.52, sources=['support/sla-p1-2026.pdf', 'policy/refund-v4.pdf']",
+    "[graph] completed in 10883ms"
+  ],
+  "workers_called": [
+    "retrieval_worker",
+    "retrieval_worker",
+    "synthesis_worker",
+    "synthesis_worker"
+  ],
+  "supervisor_route": "retrieval_worker",
+  "latency_ms": 10883,
+  "run_id": "run_20260414_170655_q01_016976",
+  "question_id": "q01"
+}

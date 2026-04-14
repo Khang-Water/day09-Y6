@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T16:55:04.077324",
+  "generated_at": "2026-04-14T17:11:36.804482",
   "day08_results_source": null,
   "day08_single_agent": {
     "total_questions": null,
@@ -9,30 +9,59 @@
     "multi_hop_accuracy": null
   },
   "day09_multi_agent": {
-    "total_traces": 91,
-    "trace_files": 91,
+    "total_traces": 106,
+    "trace_files": 106,
     "routing_distribution": {
-      "retrieval_worker": "48/91 (52.7%)",
-      "policy_tool_worker": "43/91 (47.3%)"
+      "retrieval_worker": "58/106 (54.7%)",
+      "policy_tool_worker": "48/106 (45.3%)"
     },
     "routing_counts": {
-      "policy_tool_worker": 43,
-      "retrieval_worker": 48
+      "policy_tool_worker": 48,
+      "retrieval_worker": 58
     },
-    "avg_confidence": 0.75,
-    "avg_latency_ms": 0.1,
-    "p50_latency_ms": 0,
-    "mcp_usage_rate": "0/91 (0.0%)",
-    "hitl_rate": "6/91 (6.6%)",
-    "abstain_rate": "0/91 (0.0%)",
-    "route_reason_missing_rate": "0/91 (0.0%)",
+    "avg_confidence": 0.714,
+    "avg_latency_ms": 2653.36,
+    "p50_latency_ms": 0.0,
+    "mcp_usage_rate": "5/106 (4.7%)",
+    "hitl_rate": "9/106 (8.5%)",
+    "abstain_rate": "2/106 (1.9%)",
+    "route_reason_missing_rate": "0/106 (0.0%)",
     "top_sources": [
       [
         "sla_p1_2026.txt",
         91
+      ],
+      [
+        "it/access-control-sop.md",
+        7
+      ],
+      [
+        "support/sla-p1-2026.pdf",
+        5
+      ],
+      [
+        "policy/refund-v4.pdf",
+        5
+      ],
+      [
+        "hr/leave-policy-2026.pdf",
+        3
+      ],
+      [
+        "support/helpdesk-faq.md",
+        2
       ]
     ],
-    "top_mcp_tools": []
+    "top_mcp_tools": [
+      [
+        "search_kb",
+        5
+      ],
+      [
+        "check_access_permission",
+        1
+      ]
+    ]
   },
   "analysis": {
     "routing_visibility": "Day09 has per-run route_reason and worker sequence in trace.",
