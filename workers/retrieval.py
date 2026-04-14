@@ -36,16 +36,34 @@ def _get_embedding_fn():
     from dotenv import load_dotenv
     load_dotenv()
 
-    # Option B: OpenAI (cần API key, ưu tiên vì rag_lab là 1536 dims)
-    if os.getenv("OPENAI_API_KEY"):
+    # Option B: OpenRouter via OpenAI Python SDK (OpenAI-compatible API)
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if openrouter_api_key:
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url="https://models.inference.ai.azure.com")
+            base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+            embedding_model = os.getenv("OPENROUTER_EMBEDDING_MODEL", "text-embedding-3-small")
+
+            default_headers = {}
+            http_referer = os.getenv("OPENROUTER_HTTP_REFERER")
+            x_title = os.getenv("OPENROUTER_X_TITLE")
+            if http_referer:
+                default_headers["HTTP-Referer"] = http_referer
+            if x_title:
+                default_headers["X-Title"] = x_title
+
+            client = OpenAI(
+                api_key=openrouter_api_key,
+                base_url=base_url,
+                default_headers=default_headers or None,
+            )
+
             def embed(text: str) -> list:
-                resp = client.embeddings.create(input=text, model="text-embedding-3-small")
+                resp = client.embeddings.create(input=text, model=embedding_model)
                 return resp.data[0].embedding
             return embed
-        except ImportError:
+        except Exception as e:
+            print(f"WARNING: OpenRouter embedding unavailable ({e}). Falling back.")
             pass
 
     # Option A: Sentence Transformers (offline)

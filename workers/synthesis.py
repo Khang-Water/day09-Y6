@@ -17,6 +17,7 @@ Gọi độc lập để test:
 """
 
 import os
+from dotenv import load_dotenv
 
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WORKER_NAME = "synthesis_worker"
+load_dotenv()
 
 SYSTEM_PROMPT = """Bạn là trợ lý IT Helpdesk nội bộ.
 
@@ -42,12 +44,31 @@ def _call_llm(messages: list) -> str:
     Gọi LLM để tổng hợp câu trả lời.
     TODO Sprint 2: Implement với OpenAI hoặc Gemini.
     """
-    # Option A: OpenAI
+    # Option A: OpenRouter via OpenAI Python SDK (OpenAI-compatible API)
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is not set")
+
+        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        model_name = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+
+        default_headers = {}
+        http_referer = os.getenv("OPENROUTER_HTTP_REFERER")
+        x_title = os.getenv("OPENROUTER_X_TITLE")
+        if http_referer:
+            default_headers["HTTP-Referer"] = http_referer
+        if x_title:
+            default_headers["X-Title"] = x_title
+
+        client = OpenAI(
+            api_key=openrouter_api_key,
+            base_url=base_url,
+            default_headers=default_headers or None,
+        )
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             messages=messages,
             temperature=0.1,  # Low temperature để grounded
             max_tokens=500,

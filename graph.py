@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import TypedDict, Literal, Optional
 
 # Uncomment nếu dùng LangGraph:
-# from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END
 
 # ─────────────────────────────────────────────
 # 1. Shared State — dữ liệu đi xuyên toàn graph
