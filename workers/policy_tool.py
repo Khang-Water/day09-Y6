@@ -17,8 +17,14 @@ Gọi độc lập để test:
 """
 
 import os
+import re
+import json
 import sys
 from typing import Optional
+from datetime import datetime
+import requests
+from mcp_server import dispatch_tool
+from openai import OpenAI
 
 WORKER_NAME = "policy_tool_worker"
 
@@ -35,12 +41,24 @@ def _call_mcp_tool(tool_name: str, tool_input: dict) -> dict:
 
     Hiện tại: Import trực tiếp từ mcp_server.py (trong-process mock).
     """
-    from datetime import datetime
 
     try:
         # TODO Sprint 3: Thay bằng real MCP client nếu dùng HTTP server
-        from mcp_server import dispatch_tool
-        result = dispatch_tool(tool_name, tool_input)
+        use_real_mcp = os.getenv("USE_REAL_MCP", "true").lower() == "true"
+
+        if use_real_mcp:
+            mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:8000/dispatch")
+            
+            response = requests.post(
+                mcp_url,
+                json={"tool": tool_name, "input": tool_input},
+                timeout=15
+            )
+            response.raise_for_status()
+            result = response.json().get("data")
+        else:
+            result = dispatch_tool(tool_name, tool_input)
+
         return {
             "tool": tool_name,
             "input": tool_input,
@@ -114,8 +132,20 @@ def analyze_policy(task: str, chunks: list) -> dict:
     # TODO: Check nếu đơn hàng trước 01/02/2026 → v3 applies (không có docs, nên flag cho synthesis)
     policy_name = "refund_policy_v4"
     policy_version_note = ""
-    if "31/01" in task_lower or "30/01" in task_lower or "trước 01/02" in task_lower:
+    # if "31/01" in task_lower or "30/01" in task_lower or "trước 01/02" in task_lower:
+    #     policy_version_note = "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."
+    date_match = re.search(r"(0?[1-9]|[12][0-9]|3[01])[-/](0?[1-9]|1[0-2])[-/](202[0-9])", task_lower)
+    if date_match:
+        day, month, year = map(int, date_match.groups())
+        # Nếu năm < 2026, hoặc năm 2026 nhưng tháng 1
+        if year < 2026 or (year == 2026 and month < 2):
+            policy_version_note = "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."
+            policy_name = "refund_policy_v3"
+    elif "31/01" in task_lower or "30/01" in task_lower or "trước 01/02" in task_lower:
         policy_version_note = "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."
+        policy_name = "refund_policy_v3"
+    
+    explanation = "Analyzed via rule-based policy check."
 
     # TODO Sprint 2: Gọi LLM để phân tích phức tạp hơn
     # Ví dụ:
@@ -129,6 +159,46 @@ def analyze_policy(task: str, chunks: list) -> dict:
     #     ]
     # )
     # analysis = response.choices[0].message.content
+    use_llm = os.getenv("USE_LLM_POLICY_CHECK", "true").lower() == "true"
+    if use_llm:
+        try:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Cần biến môi trường OPENAI_API_KEY
+            
+            system_prompt = """
+            Bạn là chuyên viên phân tích chính sách. 
+            Hãy phân tích yêu cầu dựa trên context và trả về kết quả định dạng JSON:
+            {
+                "policy_applies": boolean,
+                "extra_exceptions": ["Ngoại lệ 1", "Ngoại lệ 2"], 
+                "explanation": "Giải thích chi tiết lý do"
+            }
+            """
+            user_content = f"Task: {task}\n\nContext:\n" + "\n".join([c.get('text', '') for c in chunks])
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content}
+                ]
+            )
+            llm_analysis = json.loads(response.choices[0].message.content)
+            
+            # Gộp kết quả của LLM vào rule-based (Luật cứng + Phân tích mềm)
+            policy_applies = policy_applies and llm_analysis.get("policy_applies", True)
+            explanation = f"Rule-based + LLM Analysis: {llm_analysis.get('explanation', '')}"
+            
+            # Thêm các ngoại lệ LLM phát hiện được mà Rule-based bị lọt lưới
+            for exc in llm_analysis.get("extra_exceptions", []):
+                exceptions_found.append({
+                    "type": "llm_detected_exception",
+                    "rule": exc,
+                    "source": "llm_analysis"
+                })
+        except Exception as e:
+            explanation += f" LLM analysis failed: {e}"
 
     sources = list({c.get("source", "unknown") for c in chunks if c})
 
