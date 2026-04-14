@@ -25,9 +25,10 @@ SYSTEM_PROMPT = """Bạn là trợ lý IT Helpdesk nội bộ.
 Quy tắc nghiêm ngặt:
 1. CHỈ trả lời dựa vào context được cung cấp. KHÔNG dùng kiến thức ngoài.
 2. Nếu context không đủ để trả lời → nói rõ "Không đủ thông tin trong tài liệu nội bộ".
-3. Trích dẫn nguồn cuối mỗi câu quan trọng: [tên_file].
+3. Trích dẫn nguồn cuối mỗi câu quan trọng: [tên_file.txt].
 4. Trả lời súc tích, có cấu trúc. Không dài dòng.
 5. Nếu có exceptions/ngoại lệ → nêu rõ ràng trước khi kết luận.
+6. LUÔN dùng format [filename.txt] cho mọi fact được trích dẫn.
 """
 
 
@@ -100,8 +101,17 @@ def _estimate_confidence(chunks: list, answer: str, policy_result: dict) -> floa
     if not chunks:
         return 0.1  # Không có evidence → low confidence
 
-    if "Không đủ thông tin" in answer or "không có trong tài liệu" in answer.lower():
-        return 0.3  # Abstain → moderate-low
+    abstain_phrases = [
+        "không đủ thông tin",
+        "không có trong tài liệu",
+        "không tìm thấy",
+        "không được đề cập",
+        "không có thông tin",
+        "tài liệu không có",
+    ]
+
+    if any(phrase in answer.lower() for phrase in abstain_phrases):
+        return 0.3
 
     # Weighted average của chunk scores
     if chunks:
@@ -132,9 +142,9 @@ def synthesize(task: str, chunks: list, policy_result: dict) -> dict:
             "role": "user",
             "content": f"""Câu hỏi: {task}
 
-{context}
-
-Hãy trả lời câu hỏi dựa vào tài liệu trên."""
+            {context}
+            
+            Hãy trả lời câu hỏi dựa vào tài liệu trên."""
         }
     ]
 
@@ -176,7 +186,15 @@ def run(state: dict) -> dict:
         result = synthesize(task, chunks, policy_result)
         state["final_answer"] = result["answer"]
         state["sources"] = result["sources"]
+        state["retrieved_sources"] = result["sources"]
         state["confidence"] = result["confidence"]
+
+        # trigger HITL if confidence is too low
+        if result["confidence"] < 0.4:
+            state["hitl_triggered"] = True
+            state["history"].append(f"[{WORKER_NAME}] LOW_CONFIDENCE: HITL triggered")
+        else:
+            state["hitl_triggered"] = False
 
         worker_io["output"] = {
             "answer_length": len(result["answer"]),
@@ -244,3 +262,15 @@ if __name__ == "__main__":
     print(f"Confidence: {result2['confidence']}")
 
     print("\n✅ synthesis_worker test done.")
+
+    print("\n--- Test 3: Abstain case (no chunks) ---")
+    test_state3 = {
+        "task": "Mức phạt tài chính vi phạm SLA P1 là bao nhiêu?",
+        "retrieved_chunks": [],
+        "policy_result": {},
+    }
+
+    result3 = run(test_state3.copy())
+    print(f"\nAnswer:\n{result3['final_answer']}")
+    print(f"Confidence: {result3['confidence']}")
+    print(f"HITL triggered: {result3.get('hitl_triggered', False)}")
